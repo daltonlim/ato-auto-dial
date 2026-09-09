@@ -1,0 +1,687 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ATO Dial Code Generator</title>
+  <style>
+    :root {
+      --bg: #f4f1ea;
+      --card: #fffdf8;
+      --ink: #1c1914;
+      --muted: #6b6459;
+      --line: #e4ddd2;
+      --accent: #1f4e3d;
+      --accent-hover: #16382c;
+      --focus: #c45c26;
+      --danger: #8a2d1f;
+      --ok: #1f4e3d;
+      --ok-bg: #e8f1ec;
+      --fail-bg: #f6ece8;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: "Segoe UI", system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--ink);
+      line-height: 1.4;
+    }
+
+    main {
+      max-width: 36rem;
+      margin: 0 auto;
+      padding: 2rem 1.25rem 3rem;
+    }
+
+    h1 {
+      margin: 0 0 0.35rem;
+      font-size: 1.5rem;
+      font-weight: 650;
+    }
+
+    .lede {
+      margin: 0 0 1.5rem;
+      color: var(--muted);
+    }
+
+    form, .output, .history, .check, .steps {
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 1.25rem;
+    }
+
+    .field {
+      display: grid;
+      gap: 0.35rem;
+      margin-bottom: 0.9rem;
+    }
+
+    label {
+      font-size: 0.85rem;
+      font-weight: 600;
+    }
+
+    input {
+      width: 100%;
+      padding: 0.65rem 0.75rem;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      font: inherit;
+      background: #fff;
+    }
+
+    input:focus {
+      outline: 2px solid var(--focus);
+      outline-offset: 1px;
+    }
+
+    .row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0.75rem;
+    }
+
+    .actions {
+      display: flex;
+      gap: 0.6rem;
+      margin-top: 1rem;
+    }
+
+    button, .call {
+      appearance: none;
+      border: 0;
+      border-radius: 8px;
+      padding: 0.7rem 0.95rem;
+      font: inherit;
+      font-weight: 600;
+      cursor: pointer;
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    [hidden] { display: none !important; }
+
+    button[type="submit"], .call {
+      background: var(--accent);
+      color: #fff;
+    }
+
+    button[type="submit"]:hover { background: var(--accent-hover); }
+
+    button[type="button"] {
+      background: #eee9e0;
+      color: var(--ink);
+    }
+
+    .danger {
+      color: var(--danger);
+      background: #f6ece8;
+    }
+
+    .output, .history, .check, .steps {
+      margin-top: 1rem;
+    }
+
+    .output h2, .history h2, .check h2, .steps h2 {
+      margin: 0 0 0.5rem;
+      font-size: 0.9rem;
+    }
+
+    .steps p {
+      margin: 0 0 0.75rem;
+      color: var(--muted);
+    }
+
+    .steps ol {
+      margin: 0;
+      padding-left: 1.25rem;
+    }
+
+    .steps li {
+      margin-bottom: 0.5rem;
+    }
+
+    .steps li:last-child {
+      margin-bottom: 0;
+    }
+
+    .steps .note {
+      margin: 0.85rem 0 0;
+      color: var(--muted);
+      font-size: 0.9rem;
+    }
+
+    .checks {
+      display: grid;
+      gap: 0.45rem;
+    }
+
+    .check-row {
+      display: flex;
+      justify-content: space-between;
+      gap: 0.75rem;
+      align-items: baseline;
+      padding: 0.55rem 0.7rem;
+      border-radius: 8px;
+      background: #f7f3ec;
+      font-size: 0.9rem;
+    }
+
+    .check-row.pass {
+      background: var(--ok-bg);
+    }
+
+    .check-row.fail {
+      background: var(--fail-bg);
+    }
+
+    .check-label {
+      color: var(--muted);
+    }
+
+    .check-value {
+      font-weight: 650;
+      text-align: right;
+    }
+
+    .check-row.pass .check-value { color: var(--ok); }
+    .check-row.fail .check-value { color: var(--danger); }
+
+    .history-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.75rem;
+      margin-bottom: 0.5rem;
+    }
+
+    .history-head h2 { margin: 0; }
+
+    .history-head button {
+      padding: 0.4rem 0.7rem;
+      font-size: 0.8rem;
+    }
+
+    code {
+      display: block;
+      white-space: pre-wrap;
+      word-break: break-all;
+      background: #f7f3ec;
+      border-radius: 8px;
+      padding: 0.8rem;
+      font-size: 0.92rem;
+    }
+
+    .output-actions {
+      display: flex;
+      gap: 0.6rem;
+      margin-top: 0.75rem;
+    }
+
+    .status {
+      min-height: 1.2rem;
+      margin: 0.5rem 0 0;
+      color: var(--muted);
+      font-size: 0.85rem;
+    }
+
+    .hint {
+      color: var(--muted);
+      font-size: 0.8rem;
+      font-weight: 400;
+    }
+
+    .empty {
+      margin: 0;
+      color: var(--muted);
+      font-size: 0.9rem;
+    }
+
+    .entry {
+      display: grid;
+      gap: 0.45rem;
+      padding: 0.85rem 0;
+      border-top: 1px solid var(--line);
+    }
+
+    .entry:first-child { border-top: 0; padding-top: 0; }
+
+    .entry-meta {
+      font-size: 0.8rem;
+      color: var(--muted);
+    }
+
+    .entry-title {
+      font-weight: 650;
+    }
+
+    .entry-detail {
+      font-size: 0.9rem;
+    }
+
+    .entry-actions {
+      display: flex;
+      gap: 0.5rem;
+    }
+
+    .entry-actions button {
+      padding: 0.4rem 0.7rem;
+      font-size: 0.8rem;
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>ATO dial code generator</h1>
+    <p class="lede">Entries are saved in this browser only. Nothing is sent anywhere.</p>
+
+    <section class="steps">
+      <h2>Step-by-step for your payment</h2>
+      <p>When you call the EasyPay number and hear that script:</p>
+      <ol>
+        <li>Press 0 (or any key) to start the payment flow.</li>
+        <li>Enter your Payment Reference Number (PRN) or EFT code, then press #.</li>
+        <li>Enter the amount you want to pay (no decimal point; e.g. $250.00 → 25000), then press #.</li>
+        <li>Enter your card number, then press #.</li>
+        <li>Enter the 3-digit CVV (Visa/MasterCard). Do not then press #.</li>
+        <li>Enter the 4-digit expiry (MMYY, e.g. 08/30 → 0830), then press #.</li>
+        <li>Listen to the confirmation: amount, fee, card type, expiry, PRN.</li>
+        <li>If correct, press 1 to authorise the payment.</li>
+        <li>Note the 19-digit receipt number they read out.</li>
+      </ol>
+      <p class="note">If you want to hear the surcharge rates before proceeding, press 1 when prompted (“To hear the surcharge rates, press one”).</p>
+    </section>
+
+    <form id="form">
+      <div class="field">
+        <label for="prn">Payment reference (PRN)</label>
+        <input id="prn" name="prn" inputmode="numeric" autocomplete="off" required>
+      </div>
+
+      <div class="field">
+        <label for="amount">Amount <span class="hint">(digits only, e.g. 12345 for $123.45)</span></label>
+        <input id="amount" name="amount" inputmode="decimal" autocomplete="off" required>
+      </div>
+
+      <div class="field">
+        <label for="card">Card number</label>
+        <input id="card" name="card" inputmode="numeric" autocomplete="off" required>
+      </div>
+
+      <div class="row">
+        <div class="field">
+          <label for="cvv">CVV</label>
+          <input id="cvv" name="cvv" inputmode="numeric" autocomplete="off" required>
+        </div>
+        <div class="field">
+          <label for="mmyy">Expiry (MMYY)</label>
+          <input id="mmyy" name="mmyy" inputmode="numeric" maxlength="4" placeholder="0927" autocomplete="off" required>
+        </div>
+      </div>
+
+      <div class="actions">
+        <button type="submit">Generate</button>
+        <button type="button" id="clear">Clear</button>
+      </div>
+    </form>
+
+    <section class="check" id="card-check">
+      <h2>Card check</h2>
+      <div class="checks">
+        <div class="check-row" id="check-brand-row">
+          <span class="check-label">Brand</span>
+          <span class="check-value" id="check-brand">Enter a card number</span>
+        </div>
+        <div class="check-row" id="check-number-row">
+          <span class="check-label">Number</span>
+          <span class="check-value" id="check-number">—</span>
+        </div>
+        <div class="check-row" id="check-expiry-row">
+          <span class="check-label">Expiry</span>
+          <span class="check-value" id="check-expiry">—</span>
+        </div>
+        <div class="check-row" id="check-cvv-row">
+          <span class="check-label">CVV</span>
+          <span class="check-value" id="check-cvv">—</span>
+        </div>
+      </div>
+    </section>
+
+    <section class="output" hidden id="result">
+      <h2>Dial code</h2>
+      <code id="code"></code>
+      <div class="output-actions">
+        <button type="button" id="copy">Copy</button>
+        <a class="call" id="call" href="#">Call with this code</a>
+      </div>
+      <p class="status" id="status"></p>
+    </section>
+
+    <section class="history" id="history">
+      <div class="history-head">
+        <h2>Previous entries</h2>
+        <button type="button" class="danger" id="clear-history" hidden>Clear all</button>
+      </div>
+      <p class="empty" id="history-empty">No previous entries yet.</p>
+      <div id="history-list"></div>
+    </section>
+  </main>
+
+  <script>
+    const STORAGE_KEY = "ato-dial-history";
+    const MAX_ENTRIES = 50;
+
+    const form = document.getElementById("form");
+    const result = document.getElementById("result");
+    const codeEl = document.getElementById("code");
+    const callEl = document.getElementById("call");
+    const statusEl = document.getElementById("status");
+    const historyList = document.getElementById("history-list");
+    const historyEmpty = document.getElementById("history-empty");
+    const clearHistoryBtn = document.getElementById("clear-history");
+    const checkBrandRow = document.getElementById("check-brand-row");
+    const checkNumberRow = document.getElementById("check-number-row");
+    const checkExpiryRow = document.getElementById("check-expiry-row");
+    const checkCvvRow = document.getElementById("check-cvv-row");
+    const checkBrand = document.getElementById("check-brand");
+    const checkNumber = document.getElementById("check-number");
+    const checkExpiry = document.getElementById("check-expiry");
+    const checkCvv = document.getElementById("check-cvv");
+
+    const CardCheck = {
+      luhn(pan) {
+        let sum = 0;
+        let doubleDigit = false;
+        for (let i = pan.length - 1; i >= 0; i -= 1) {
+          let digit = Number(pan[i]);
+          if (doubleDigit) {
+            digit *= 2;
+            if (digit > 9) digit -= 9;
+          }
+          sum += digit;
+          doubleDigit = !doubleDigit;
+        }
+        return pan.length > 0 && sum % 10 === 0;
+      },
+
+      detectBrand(pan) {
+        if (!pan) return { name: "Unknown", lengths: [13, 14, 15, 16, 19], cvv: 3 };
+        if (/^3[47]/.test(pan)) return { name: "American Express", lengths: [15], cvv: 4 };
+        if (/^4/.test(pan)) return { name: "Visa", lengths: [13, 16, 19], cvv: 3 };
+        if (/^5[1-5]/.test(pan)) return { name: "Mastercard", lengths: [16], cvv: 3 };
+        if (pan.length >= 4) {
+          const prefix = Number(pan.slice(0, 4));
+          if (prefix >= 2221 && prefix <= 2720) return { name: "Mastercard", lengths: [16], cvv: 3 };
+        } else if (/^2/.test(pan)) {
+          return { name: "Mastercard", lengths: [16], cvv: 3 };
+        }
+        if (/^3(0[0-5]|[68])/.test(pan)) return { name: "Diners Club", lengths: [14], cvv: 3 };
+        if (/^35/.test(pan)) return { name: "JCB", lengths: [16], cvv: 3 };
+        if (/^(6011|65|64[4-9]|622)/.test(pan)) return { name: "Discover", lengths: [16, 19], cvv: 3 };
+        if (/^62/.test(pan)) return { name: "UnionPay", lengths: [16, 17, 18, 19], cvv: 3 };
+        return { name: "Unknown", lengths: [13, 14, 15, 16, 19], cvv: 3 };
+      },
+
+      checkNumber(pan) {
+        const brand = this.detectBrand(pan);
+        if (!pan) return { ok: null, label: "—", brand };
+        if (!brand.lengths.includes(pan.length)) {
+          return {
+            ok: false,
+            label: `${pan.length} digits · needs ${brand.lengths.join(" or ")}`,
+            brand,
+          };
+        }
+        if (!this.luhn(pan)) return { ok: false, label: "Fails checksum", brand };
+        return { ok: true, label: "Checksum pass", brand };
+      },
+
+      checkExpiry(mmyy, now = new Date()) {
+        if (!mmyy) return { ok: null, label: "—" };
+        if (mmyy.length !== 4) return { ok: false, label: "Use MMYY" };
+        const month = Number(mmyy.slice(0, 2));
+        const year = 2000 + Number(mmyy.slice(2, 4));
+        if (month < 1 || month > 12) return { ok: false, label: "Invalid month" };
+        const expiry = new Date(year, month, 0, 23, 59, 59);
+        const label = expiry.toLocaleString("en-AU", { month: "short", year: "numeric" });
+        if (expiry < now) return { ok: false, label: `Expired · ${label}` };
+        return { ok: true, label };
+      },
+
+      checkCvv(cvv, brand) {
+        if (!cvv) return { ok: null, label: "—" };
+        const expected = brand?.cvv ?? 3;
+        if (cvv.length === expected) return { ok: true, label: `${cvv.length} digits` };
+        return { ok: false, label: `${cvv.length} digits · needs ${expected}` };
+      },
+
+      evaluate({ card, cvv, mmyy }) {
+        const number = this.checkNumber(card);
+        return {
+          brand: number.brand,
+          number,
+          expiry: this.checkExpiry(mmyy),
+          cvv: this.checkCvv(cvv, number.brand),
+        };
+      },
+    };
+
+    function digits(value) {
+      return value.replace(/\D/g, "");
+    }
+
+    function buildCode({ prn, amount, card, cvv, mmyy }) {
+      return `1300898089,0,,,,${prn}#,,,,${amount}#,,,,${card}#,,,,${cvv}#,,,,${mmyy}#`;
+    }
+
+    function loadEntries() {
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        return raw ? JSON.parse(raw) : [];
+      } catch {
+        return [];
+      }
+    }
+
+    function saveEntries(entries) {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(entries));
+    }
+
+    function sameValues(a, b) {
+      return a.prn === b.prn
+        && a.amount === b.amount
+        && a.card === b.card
+        && a.cvv === b.cvv
+        && a.mmyy === b.mmyy;
+    }
+
+    function maskCard(card) {
+      const last4 = card.slice(-4);
+      return last4 ? `•••• ${last4}` : "••••";
+    }
+
+    function formatAmount(amount) {
+      const cents = Number.parseInt(amount, 10);
+      if (Number.isNaN(cents)) return amount;
+      return new Intl.NumberFormat("en-AU", {
+        style: "currency",
+        currency: "AUD",
+      }).format(cents / 100);
+    }
+
+    function formatTime(iso) {
+      return new Date(iso).toLocaleString("en-AU", {
+        day: "numeric",
+        month: "short",
+        year: "numeric",
+        hour: "numeric",
+        minute: "2-digit",
+      });
+    }
+
+    function setCheckRow(row, valueEl, result, emptyLabel) {
+      row.classList.toggle("pass", result.ok === true);
+      row.classList.toggle("fail", result.ok === false);
+      valueEl.textContent = result.ok == null ? emptyLabel : result.label;
+    }
+
+    function renderCardCheck(values) {
+      const result = CardCheck.evaluate(values);
+      const hasCard = Boolean(values.card);
+
+      checkBrandRow.classList.toggle("pass", hasCard && result.brand.name !== "Unknown");
+      checkBrandRow.classList.toggle("fail", hasCard && result.brand.name === "Unknown");
+      checkBrand.textContent = hasCard ? result.brand.name : "Enter a card number";
+
+      setCheckRow(checkNumberRow, checkNumber, result.number, "—");
+      setCheckRow(checkExpiryRow, checkExpiry, result.expiry, "—");
+      setCheckRow(checkCvvRow, checkCvv, result.cvv, "—");
+    }
+
+    function currentCardValues() {
+      return {
+        card: digits(form.card.value),
+        cvv: digits(form.cvv.value),
+        mmyy: digits(form.mmyy.value),
+      };
+    }
+
+    function showCode(values) {
+      const code = buildCode(values);
+      form.prn.value = values.prn;
+      form.amount.value = values.amount;
+      form.card.value = values.card;
+      form.cvv.value = values.cvv;
+      form.mmyy.value = values.mmyy;
+      codeEl.textContent = code;
+      callEl.href = `tel:${code}`;
+      result.hidden = false;
+      statusEl.textContent = "";
+      renderCardCheck(values);
+    }
+
+    function renderHistory() {
+      const entries = loadEntries();
+      historyList.replaceChildren();
+      historyEmpty.hidden = entries.length > 0;
+      clearHistoryBtn.hidden = entries.length === 0;
+
+      for (const entry of entries) {
+        const item = document.createElement("article");
+        item.className = "entry";
+
+        const title = document.createElement("div");
+        title.className = "entry-title";
+        title.textContent = `PRN ${entry.prn}`;
+
+        const detail = document.createElement("div");
+        detail.className = "entry-detail";
+        detail.textContent = `${formatAmount(entry.amount)} · ${maskCard(entry.card)} · ${entry.mmyy}`;
+
+        const meta = document.createElement("div");
+        meta.className = "entry-meta";
+        meta.textContent = formatTime(entry.createdAt);
+
+        const actions = document.createElement("div");
+        actions.className = "entry-actions";
+
+        const useBtn = document.createElement("button");
+        useBtn.type = "button";
+        useBtn.textContent = "Use";
+        useBtn.addEventListener("click", () => {
+          showCode(entry);
+          window.scrollTo({ top: 0, behavior: "smooth" });
+        });
+
+        const deleteBtn = document.createElement("button");
+        deleteBtn.type = "button";
+        deleteBtn.className = "danger";
+        deleteBtn.textContent = "Delete";
+        deleteBtn.addEventListener("click", () => {
+          const next = loadEntries().filter((item) => item.id !== entry.id);
+          saveEntries(next);
+          renderHistory();
+        });
+
+        actions.append(useBtn, deleteBtn);
+        item.append(title, detail, meta, actions);
+        historyList.append(item);
+      }
+    }
+
+    function storeEntry(values) {
+      const entries = loadEntries();
+      const existing = entries.findIndex((entry) => sameValues(entry, values));
+      if (existing >= 0) {
+        entries.splice(existing, 1);
+      }
+
+      entries.unshift({
+        id: crypto.randomUUID(),
+        createdAt: new Date().toISOString(),
+        ...values,
+      });
+
+      saveEntries(entries.slice(0, MAX_ENTRIES));
+      renderHistory();
+    }
+
+    form.addEventListener("submit", (event) => {
+      event.preventDefault();
+
+      const values = {
+        prn: digits(form.prn.value),
+        amount: digits(form.amount.value),
+        card: digits(form.card.value),
+        cvv: digits(form.cvv.value),
+        mmyy: digits(form.mmyy.value),
+      };
+
+      showCode(values);
+      storeEntry(values);
+      renderCardCheck(values);
+    });
+
+    ["card", "cvv", "mmyy"].forEach((name) => {
+      form[name].addEventListener("input", () => {
+        renderCardCheck(currentCardValues());
+      });
+    });
+
+    document.getElementById("copy").addEventListener("click", async () => {
+      const code = codeEl.textContent;
+      try {
+        await navigator.clipboard.writeText(code);
+        statusEl.textContent = "Copied to clipboard.";
+      } catch {
+        statusEl.textContent = "Copy failed. Select the code and copy it manually.";
+      }
+    });
+
+    document.getElementById("clear").addEventListener("click", () => {
+      form.reset();
+      result.hidden = true;
+      codeEl.textContent = "";
+      callEl.href = "#";
+      statusEl.textContent = "";
+      renderCardCheck({ card: "", cvv: "", mmyy: "" });
+    });
+
+    clearHistoryBtn.addEventListener("click", () => {
+      if (!window.confirm("Delete all previous entries from this browser?")) return;
+      saveEntries([]);
+      renderHistory();
+    });
+
+    renderHistory();
+    renderCardCheck(currentCardValues());
+  </script>
+</body>
+</html>
