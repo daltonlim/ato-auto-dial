@@ -48,7 +48,7 @@
       color: var(--muted);
     }
 
-    form, .output, .history, .check, .steps {
+    form, .output, .history, .check, .steps, .timer {
       background: var(--card);
       border: 1px solid var(--line);
       border-radius: 12px;
@@ -120,18 +120,46 @@
       color: var(--ink);
     }
 
+    button:disabled {
+      opacity: 0.65;
+      cursor: default;
+    }
+
+    #timer-start:not(:disabled) {
+      background: var(--accent);
+      color: #fff;
+    }
+
     .danger {
       color: var(--danger);
       background: #f6ece8;
     }
 
-    .output, .history, .check, .steps {
+    .output, .history, .check, .steps, .timer {
       margin-top: 1rem;
     }
 
-    .output h2, .history h2, .check h2, .steps h2 {
+    .output h2, .history h2, .check h2, .steps h2, .timer h2 {
       margin: 0 0 0.5rem;
       font-size: 0.9rem;
+    }
+
+    .timer-display {
+      font-size: 2.4rem;
+      font-variant-numeric: tabular-nums;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      margin: 0.2rem 0 0.75rem;
+    }
+
+    .timer-display.done {
+      color: var(--accent);
+    }
+
+    .timer-status {
+      margin: 0.65rem 0 0;
+      color: var(--muted);
+      font-size: 0.85rem;
     }
 
     .steps p {
@@ -331,6 +359,16 @@
         <button type="button" id="clear">Clear</button>
       </div>
     </form>
+
+    <section class="timer" id="timer">
+      <h2>50-second countdown</h2>
+      <p class="timer-display" id="timer-display" aria-live="polite">0:50</p>
+      <div class="actions">
+        <button type="button" id="timer-start">Start</button>
+        <button type="button" id="timer-reset">Reset</button>
+      </div>
+      <p class="timer-status" id="timer-status"></p>
+    </section>
 
     <section class="check" id="card-check">
       <h2>Card check</h2>
@@ -678,6 +716,100 @@
       if (!window.confirm("Delete all previous entries from this browser?")) return;
       saveEntries([]);
       renderHistory();
+    });
+
+    const COUNTDOWN_SECONDS = 50;
+    const timerDisplay = document.getElementById("timer-display");
+    const timerStart = document.getElementById("timer-start");
+    const timerReset = document.getElementById("timer-reset");
+    const timerStatus = document.getElementById("timer-status");
+    let timerInterval = null;
+    let timerEndsAt = 0;
+    let audioContext = null;
+
+    function formatCountdown(seconds) {
+      const whole = Math.max(0, Math.ceil(seconds));
+      return `0:${String(whole).padStart(2, "0")}`;
+    }
+
+    function getAudioContext() {
+      if (!audioContext) {
+        audioContext = new AudioContext();
+      }
+      return audioContext;
+    }
+
+    function playCountdownSound() {
+      const ctx = getAudioContext();
+      const start = ctx.currentTime;
+      const notes = [880, 880, 1320];
+
+      notes.forEach((freq, index) => {
+        const when = start + index * 0.38;
+        const oscillator = ctx.createOscillator();
+        const gain = ctx.createGain();
+        oscillator.type = "sine";
+        oscillator.frequency.setValueAtTime(freq, when);
+        gain.gain.setValueAtTime(0.0001, when);
+        gain.gain.exponentialRampToValueAtTime(0.28, when + 0.02);
+        gain.gain.exponentialRampToValueAtTime(0.0001, when + 0.32);
+        oscillator.connect(gain);
+        gain.connect(ctx.destination);
+        oscillator.start(when);
+        oscillator.stop(when + 0.35);
+      });
+    }
+
+    function stopCountdown() {
+      if (timerInterval) {
+        window.clearInterval(timerInterval);
+        timerInterval = null;
+      }
+    }
+
+    function setTimerButtons(running) {
+      timerStart.disabled = running;
+      timerStart.textContent = running ? "Running" : "Start";
+    }
+
+    function finishCountdown() {
+      stopCountdown();
+      timerDisplay.textContent = "0:00";
+      timerDisplay.classList.add("done");
+      timerStatus.textContent = "Time is up.";
+      setTimerButtons(false);
+      playCountdownSound();
+    }
+
+    function tickCountdown() {
+      const remaining = (timerEndsAt - Date.now()) / 1000;
+      if (remaining <= 0) {
+        finishCountdown();
+        return;
+      }
+      timerDisplay.textContent = formatCountdown(remaining);
+    }
+
+    timerStart.addEventListener("click", async () => {
+      stopCountdown();
+      timerDisplay.classList.remove("done");
+      timerStatus.textContent = "";
+      const ctx = getAudioContext();
+      if (ctx.state === "suspended") {
+        await ctx.resume();
+      }
+      timerEndsAt = Date.now() + COUNTDOWN_SECONDS * 1000;
+      timerDisplay.textContent = formatCountdown(COUNTDOWN_SECONDS);
+      setTimerButtons(true);
+      timerInterval = window.setInterval(tickCountdown, 200);
+    });
+
+    timerReset.addEventListener("click", () => {
+      stopCountdown();
+      timerDisplay.classList.remove("done");
+      timerDisplay.textContent = formatCountdown(COUNTDOWN_SECONDS);
+      timerStatus.textContent = "";
+      setTimerButtons(false);
     });
 
     renderHistory();
