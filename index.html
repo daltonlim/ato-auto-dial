@@ -66,7 +66,7 @@
       font-weight: 600;
     }
 
-    input {
+    input, textarea {
       width: 100%;
       padding: 0.65rem 0.75rem;
       border: 1px solid var(--line);
@@ -75,7 +75,12 @@
       background: #fff;
     }
 
-    input:focus {
+    textarea {
+      resize: vertical;
+      min-height: 5.5rem;
+    }
+
+    input:focus, textarea:focus {
       outline: 2px solid var(--focus);
       outline-offset: 1px;
     }
@@ -360,6 +365,12 @@
       </div>
 
       <div class="field">
+        <label for="card-paste">Paste card details</label>
+        <textarea id="card-paste" name="card-paste" rows="4" placeholder="Account Number 4111111111111111&#10;Expiration Date 08/2030&#10;CVV 123" autocomplete="off"></textarea>
+        <span class="hint">Paste Account Number, Expiration Date, and CVV. Values fill in instantly.</span>
+      </div>
+
+      <div class="field">
         <label for="card">Card number</label>
         <input id="card" name="card" inputmode="numeric" autocomplete="off" required>
       </div>
@@ -378,7 +389,7 @@
       <div class="field checkbox">
         <label for="automode">
           <input id="automode" name="automode" type="checkbox">
-          Automode <span class="hint">(adds ,,,,,,,,1 to authorise)</span>
+          Automode <span class="hint">(adds ,,,,,,,,,,,,,,,1 to authorise)</span>
         </label>
       </div>
 
@@ -396,8 +407,8 @@
     </form>
 
     <section class="timer" id="timer">
-      <h2>50-second countdown</h2>
-      <p class="timer-display" id="timer-display" aria-live="polite">0:50</p>
+      <h2>30-second countdown</h2>
+      <p class="timer-display" id="timer-display" aria-live="polite">0:30</p>
       <div class="actions">
         <button type="button" id="timer-start">Start</button>
         <button type="button" id="timer-reset">Reset</button>
@@ -461,6 +472,7 @@
     const statusEl = document.getElementById("status");
     const formStatus = document.getElementById("form-status");
     const imessageEmail = document.getElementById("imessage-email");
+    const cardPaste = document.getElementById("card-paste");
     const historyList = document.getElementById("history-list");
     const historyEmpty = document.getElementById("history-empty");
     const clearHistoryBtn = document.getElementById("clear-history");
@@ -555,9 +567,46 @@
       return value.replace(/\D/g, "");
     }
 
+    function parseCardBlock(text) {
+      if (!text || !/account\s*number|expiration\s*date|\bcvv\b/i.test(text)) {
+        return null;
+      }
+
+      const parsed = {};
+      const account = text.match(/account\s*number\s*:?\s*([\d\s-]+)/i);
+      const expiry = text.match(/expiration\s*date\s*:?\s*(\d{1,2})\s*[/\-.]\s*(\d{2,4})/i);
+      const cvv = text.match(/\bcvv\s*:?\s*(\d{3,4})/i);
+
+      if (account) parsed.card = digits(account[1]);
+      if (expiry) {
+        const month = expiry[1].padStart(2, "0");
+        const year = expiry[2].length === 4 ? expiry[2].slice(-2) : expiry[2].padStart(2, "0");
+        parsed.mmyy = `${month}${year}`;
+      }
+      if (cvv) parsed.cvv = cvv[1];
+
+      if (!parsed.card && !parsed.mmyy && !parsed.cvv) return null;
+      return parsed;
+    }
+
+    function applyParsedCard(parsed) {
+      if (parsed.card) form.card.value = parsed.card;
+      if (parsed.cvv) form.cvv.value = parsed.cvv;
+      if (parsed.mmyy) form.mmyy.value = parsed.mmyy;
+      formStatus.textContent = "Card details filled.";
+      renderCardCheck(currentCardValues());
+      if (!result.hidden && form.prn.value && form.card.value) {
+        const values = currentDialValues();
+        const code = buildCode(values);
+        codeEl.textContent = code;
+        callEl.href = `tel:${code}`;
+      }
+      writeDraft();
+    }
+
     function buildCode({ prn, amount, card, cvv, mmyy, automode }) {
       const code = `1300898089,0,,,,${prn}#,,,,${amount}#,,,,${card}#,,,,${cvv}#,,,,${mmyy}#`;
-      return automode ? `${code},,,,,,,,1` : code;
+      return automode ? `${code},,,,,,,,,,,,,,,1` : code;
     }
 
     function loadEntries() {
@@ -796,7 +845,11 @@
       renderCardCheck(values);
     });
 
-    form.addEventListener("input", () => {
+    form.addEventListener("input", (event) => {
+      if (event.target === cardPaste) {
+        const parsed = parseCardBlock(cardPaste.value);
+        if (parsed) applyParsedCard(parsed);
+      }
       renderCardCheck(currentCardValues());
       if (!result.hidden && form.prn.value && form.card.value) {
         const values = currentDialValues();
@@ -805,6 +858,15 @@
         callEl.href = `tel:${code}`;
       }
       writeDraft();
+    });
+
+    form.addEventListener("paste", (event) => {
+      const text = event.clipboardData?.getData("text") || "";
+      const parsed = parseCardBlock(text);
+      if (!parsed) return;
+      event.preventDefault();
+      cardPaste.value = text.trim();
+      applyParsedCard(parsed);
     });
 
     document.getElementById("copy").addEventListener("click", async () => {
@@ -835,7 +897,7 @@
       renderHistory();
     });
 
-    const COUNTDOWN_SECONDS = 50;
+    const COUNTDOWN_SECONDS = 30;
     const timerDisplay = document.getElementById("timer-display");
     const timerStart = document.getElementById("timer-start");
     const timerReset = document.getElementById("timer-reset");
