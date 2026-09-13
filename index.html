@@ -80,6 +80,18 @@
       outline-offset: 1px;
     }
 
+    .checkbox label {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      font-weight: 600;
+    }
+
+    .checkbox input {
+      width: auto;
+      accent-color: var(--accent);
+    }
+
     .row {
       display: grid;
       grid-template-columns: 1fr 1fr;
@@ -126,7 +138,7 @@
     }
 
     #timer-start:not(:disabled),
-    #send-imessage {
+    .imessage-send {
       background: var(--accent);
       color: #fff;
     }
@@ -362,10 +374,24 @@
         </div>
       </div>
 
+      <div class="field checkbox">
+        <label for="automode">
+          <input id="automode" name="automode" type="checkbox">
+          Automode <span class="hint">(adds ,,,,,,,,1 to authorise)</span>
+        </label>
+      </div>
+
+      <div class="field">
+        <label for="imessage-email">iMessage email</label>
+        <input id="imessage-email" name="imessage-email" type="email" inputmode="email" autocomplete="email" placeholder="name@icloud.com">
+      </div>
+
       <div class="actions">
         <button type="submit">Generate</button>
+        <button type="button" class="imessage-send" id="send-imessage">Send via iMessage</button>
         <button type="button" id="clear">Clear</button>
       </div>
+      <p class="status" id="form-status"></p>
     </form>
 
     <section class="timer" id="timer">
@@ -406,15 +432,7 @@
       <div class="output-actions">
         <button type="button" id="copy">Copy</button>
         <a class="call" id="call" href="#">Call with this code</a>
-      </div>
-      <div class="imessage">
-        <div class="field">
-          <label for="imessage-email">iMessage email</label>
-          <input id="imessage-email" name="imessage-email" type="email" inputmode="email" autocomplete="email" placeholder="name@icloud.com">
-        </div>
-        <div class="output-actions">
-          <button type="button" id="send-imessage">Send to iMessage</button>
-        </div>
+        <button type="button" class="imessage-send">Send via iMessage</button>
       </div>
       <p class="status" id="status"></p>
     </section>
@@ -440,6 +458,7 @@
     const codeEl = document.getElementById("code");
     const callEl = document.getElementById("call");
     const statusEl = document.getElementById("status");
+    const formStatus = document.getElementById("form-status");
     const imessageEmail = document.getElementById("imessage-email");
     const historyList = document.getElementById("history-list");
     const historyEmpty = document.getElementById("history-empty");
@@ -535,8 +554,9 @@
       return value.replace(/\D/g, "");
     }
 
-    function buildCode({ prn, amount, card, cvv, mmyy }) {
-      return `1300898089,0,,,,${prn}#,,,,${amount}#,,,,${card}#,,,,${cvv}#,,,,${mmyy}#`;
+    function buildCode({ prn, amount, card, cvv, mmyy, automode }) {
+      const code = `1300898089,0,,,,${prn}#,,,,${amount}#,,,,${card}#,,,,${cvv}#,,,,${mmyy}#`;
+      return automode ? `${code},,,,,,,,1` : code;
     }
 
     function loadEntries() {
@@ -569,6 +589,7 @@
           card: form.card.value,
           cvv: form.cvv.value,
           mmyy: form.mmyy.value,
+          automode: form.automode.checked,
           code: codeEl.textContent,
         }));
       } catch {
@@ -592,6 +613,18 @@
       form.card.value = draft.card || "";
       form.cvv.value = draft.cvv || "";
       form.mmyy.value = draft.mmyy || "";
+      form.automode.checked = Boolean(draft.automode);
+      if (draft.prn && draft.card) {
+        showCode({
+          prn: digits(draft.prn),
+          amount: digits(draft.amount || ""),
+          card: digits(draft.card),
+          cvv: digits(draft.cvv || ""),
+          mmyy: digits(draft.mmyy || ""),
+          automode: Boolean(draft.automode),
+        });
+        return;
+      }
       if (draft.code) {
         codeEl.textContent = draft.code;
         callEl.href = `tel:${draft.code}`;
@@ -604,7 +637,8 @@
         && a.amount === b.amount
         && a.card === b.card
         && a.cvv === b.cvv
-        && a.mmyy === b.mmyy;
+        && a.mmyy === b.mmyy
+        && Boolean(a.automode) === Boolean(b.automode);
     }
 
     function maskCard(card) {
@@ -658,6 +692,17 @@
       };
     }
 
+    function currentDialValues() {
+      return {
+        prn: digits(form.prn.value),
+        amount: digits(form.amount.value),
+        card: digits(form.card.value),
+        cvv: digits(form.cvv.value),
+        mmyy: digits(form.mmyy.value),
+        automode: form.automode.checked,
+      };
+    }
+
     function showCode(values) {
       const code = buildCode(values);
       form.prn.value = values.prn;
@@ -665,6 +710,7 @@
       form.card.value = values.card;
       form.cvv.value = values.cvv;
       form.mmyy.value = values.mmyy;
+      form.automode.checked = Boolean(values.automode);
       codeEl.textContent = code;
       callEl.href = `tel:${code}`;
       result.hidden = false;
@@ -689,7 +735,7 @@
 
         const detail = document.createElement("div");
         detail.className = "entry-detail";
-        detail.textContent = `${formatAmount(entry.amount)} · ${maskCard(entry.card)} · ${entry.mmyy}`;
+        detail.textContent = `${formatAmount(entry.amount)} · ${maskCard(entry.card)} · ${entry.mmyy}${entry.automode ? " · Automode" : ""}`;
 
         const meta = document.createElement("div");
         meta.className = "entry-meta";
@@ -742,13 +788,7 @@
     form.addEventListener("submit", (event) => {
       event.preventDefault();
 
-      const values = {
-        prn: digits(form.prn.value),
-        amount: digits(form.amount.value),
-        card: digits(form.card.value),
-        cvv: digits(form.cvv.value),
-        mmyy: digits(form.mmyy.value),
-      };
+      const values = currentDialValues();
 
       showCode(values);
       storeEntry(values);
@@ -757,6 +797,12 @@
 
     form.addEventListener("input", () => {
       renderCardCheck(currentCardValues());
+      if (!result.hidden && form.prn.value && form.card.value) {
+        const values = currentDialValues();
+        const code = buildCode(values);
+        codeEl.textContent = code;
+        callEl.href = `tel:${code}`;
+      }
       writeDraft();
     });
 
@@ -776,8 +822,10 @@
       codeEl.textContent = "";
       callEl.href = "#";
       statusEl.textContent = "";
+      formStatus.textContent = "";
       renderCardCheck({ card: "", cvv: "", mmyy: "" });
       clearDraft();
+      restoreIMessageEmail();
     });
 
     clearHistoryBtn.addEventListener("click", () => {
@@ -912,39 +960,54 @@
       setTimerButtons(false);
     });
 
-    try {
-      imessageEmail.value = localStorage.getItem(IMESSAGE_KEY) || "";
-    } catch {
-      imessageEmail.value = "";
+    function restoreIMessageEmail() {
+      try {
+        imessageEmail.value = localStorage.getItem(IMESSAGE_KEY) || "";
+      } catch {
+        imessageEmail.value = "";
+      }
     }
 
-    imessageEmail.addEventListener("input", () => {
-      try {
-        localStorage.setItem(IMESSAGE_KEY, imessageEmail.value.trim());
-      } catch {
-        /* ignore quota / private mode */
-      }
-    });
+    function setSendStatus(message) {
+      formStatus.textContent = message;
+      statusEl.textContent = message;
+    }
 
-    document.getElementById("send-imessage").addEventListener("click", () => {
-      const email = imessageEmail.value.trim();
-      const code = codeEl.textContent.trim();
-      if (!email || !email.includes("@")) {
-        statusEl.textContent = "Enter an iMessage email first.";
-        imessageEmail.focus();
-        return;
-      }
-      if (!code) {
-        statusEl.textContent = "Generate a dial code first.";
-        return;
-      }
+    function saveIMessageEmail(email) {
       try {
         localStorage.setItem(IMESSAGE_KEY, email);
       } catch {
         /* ignore quota / private mode */
       }
-      const url = `sms:${encodeURIComponent(email)}&body=${encodeURIComponent(code)}`;
+    }
+
+    function sendViaIMessage() {
+      const email = imessageEmail.value.trim();
+      if (!email || !email.includes("@")) {
+        setSendStatus("Enter an iMessage email first.");
+        imessageEmail.focus();
+        return;
+      }
+      if (!form.reportValidity()) return;
+
+      const values = currentDialValues();
+      showCode(values);
+      storeEntry(values);
+      saveIMessageEmail(email);
+
+      const code = codeEl.textContent.trim();
+      const url = `sms:/open?addresses=${encodeURIComponent(email)}&body=${encodeURIComponent(code)}`;
       window.location.href = url;
+    }
+
+    restoreIMessageEmail();
+
+    imessageEmail.addEventListener("input", () => {
+      saveIMessageEmail(imessageEmail.value.trim());
+    });
+
+    document.querySelectorAll(".imessage-send").forEach((button) => {
+      button.addEventListener("click", sendViaIMessage);
     });
 
     restoreDraft();
