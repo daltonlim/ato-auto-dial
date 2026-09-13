@@ -378,7 +378,7 @@
       <div class="field checkbox">
         <label for="automode">
           <input id="automode" name="automode" type="checkbox">
-          Automode <span class="hint">(adds ,,,,,,,,1 to authorise)</span>
+          Automode <span class="hint">(waits about 30 seconds, then dials 1 to authorise)</span>
         </label>
       </div>
 
@@ -453,6 +453,7 @@
     const IMESSAGE_KEY = "ato-imessage-email";
     const DRAFT_KEY = "ato-dial-draft";
     const MAX_ENTRIES = 50;
+    const AUTO_APPROVE_PAUSES = 15; // iPhone treats each comma as a two-second dialing pause.
 
     const form = document.getElementById("form");
     const result = document.getElementById("result");
@@ -557,7 +558,7 @@
 
     function buildCode({ prn, amount, card, cvv, mmyy, automode }) {
       const code = `1300898089,0,,,,${prn}#,,,,${amount}#,,,,${card}#,,,,${cvv}#,,,,${mmyy}#`;
-      return automode ? `${code},,,,,,,,1` : code;
+      return automode ? `${code}${",".repeat(AUTO_APPROVE_PAUSES)}1` : code;
     }
 
     function loadEntries() {
