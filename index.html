@@ -125,7 +125,8 @@
       cursor: default;
     }
 
-    #timer-start:not(:disabled) {
+    #timer-start:not(:disabled),
+    #send-imessage {
       background: var(--accent);
       color: #fff;
     }
@@ -249,8 +250,15 @@
 
     .output-actions {
       display: flex;
+      flex-wrap: wrap;
       gap: 0.6rem;
       margin-top: 0.75rem;
+    }
+
+    .imessage {
+      display: grid;
+      gap: 0.5rem;
+      margin-top: 0.85rem;
     }
 
     .status {
@@ -399,6 +407,15 @@
         <button type="button" id="copy">Copy</button>
         <a class="call" id="call" href="#">Call with this code</a>
       </div>
+      <div class="imessage">
+        <div class="field">
+          <label for="imessage-email">iMessage email</label>
+          <input id="imessage-email" name="imessage-email" type="email" inputmode="email" autocomplete="email" placeholder="name@icloud.com">
+        </div>
+        <div class="output-actions">
+          <button type="button" id="send-imessage">Send to iMessage</button>
+        </div>
+      </div>
       <p class="status" id="status"></p>
     </section>
 
@@ -414,6 +431,8 @@
 
   <script>
     const STORAGE_KEY = "ato-dial-history";
+    const IMESSAGE_KEY = "ato-imessage-email";
+    const DRAFT_KEY = "ato-dial-draft";
     const MAX_ENTRIES = 50;
 
     const form = document.getElementById("form");
@@ -421,6 +440,7 @@
     const codeEl = document.getElementById("code");
     const callEl = document.getElementById("call");
     const statusEl = document.getElementById("status");
+    const imessageEmail = document.getElementById("imessage-email");
     const historyList = document.getElementById("history-list");
     const historyEmpty = document.getElementById("history-empty");
     const clearHistoryBtn = document.getElementById("clear-history");
@@ -532,6 +552,53 @@
       localStorage.setItem(STORAGE_KEY, JSON.stringify(entries));
     }
 
+    function readDraft() {
+      try {
+        const raw = localStorage.getItem(DRAFT_KEY);
+        return raw ? JSON.parse(raw) : null;
+      } catch {
+        return null;
+      }
+    }
+
+    function writeDraft() {
+      try {
+        localStorage.setItem(DRAFT_KEY, JSON.stringify({
+          prn: form.prn.value,
+          amount: form.amount.value,
+          card: form.card.value,
+          cvv: form.cvv.value,
+          mmyy: form.mmyy.value,
+          code: codeEl.textContent,
+        }));
+      } catch {
+        /* ignore quota / private mode */
+      }
+    }
+
+    function clearDraft() {
+      try {
+        localStorage.removeItem(DRAFT_KEY);
+      } catch {
+        /* ignore */
+      }
+    }
+
+    function restoreDraft() {
+      const draft = readDraft();
+      if (!draft) return;
+      form.prn.value = draft.prn || "";
+      form.amount.value = draft.amount || "";
+      form.card.value = draft.card || "";
+      form.cvv.value = draft.cvv || "";
+      form.mmyy.value = draft.mmyy || "";
+      if (draft.code) {
+        codeEl.textContent = draft.code;
+        callEl.href = `tel:${draft.code}`;
+        result.hidden = false;
+      }
+    }
+
     function sameValues(a, b) {
       return a.prn === b.prn
         && a.amount === b.amount
@@ -603,6 +670,7 @@
       result.hidden = false;
       statusEl.textContent = "";
       renderCardCheck(values);
+      writeDraft();
     }
 
     function renderHistory() {
@@ -687,10 +755,9 @@
       renderCardCheck(values);
     });
 
-    ["card", "cvv", "mmyy"].forEach((name) => {
-      form[name].addEventListener("input", () => {
-        renderCardCheck(currentCardValues());
-      });
+    form.addEventListener("input", () => {
+      renderCardCheck(currentCardValues());
+      writeDraft();
     });
 
     document.getElementById("copy").addEventListener("click", async () => {
@@ -710,6 +777,7 @@
       callEl.href = "#";
       statusEl.textContent = "";
       renderCardCheck({ card: "", cvv: "", mmyy: "" });
+      clearDraft();
     });
 
     clearHistoryBtn.addEventListener("click", () => {
@@ -739,24 +807,54 @@
       return audioContext;
     }
 
-    function playCountdownSound() {
-      const ctx = getAudioContext();
-      const start = ctx.currentTime;
-      const notes = [880, 880, 1320];
+    let alarmTimeouts = [];
+    let lastKeepalive = 0;
 
-      notes.forEach((freq, index) => {
-        const when = start + index * 0.38;
-        const oscillator = ctx.createOscillator();
-        const gain = ctx.createGain();
-        oscillator.type = "sine";
-        oscillator.frequency.setValueAtTime(freq, when);
-        gain.gain.setValueAtTime(0.0001, when);
-        gain.gain.exponentialRampToValueAtTime(0.28, when + 0.02);
-        gain.gain.exponentialRampToValueAtTime(0.0001, when + 0.32);
-        oscillator.connect(gain);
-        gain.connect(ctx.destination);
-        oscillator.start(when);
-        oscillator.stop(when + 0.35);
+    function clearAlarm() {
+      alarmTimeouts.forEach((id) => window.clearTimeout(id));
+      alarmTimeouts = [];
+    }
+
+    function keepAudioAlive() {
+      const ctx = getAudioContext();
+      if (Date.now() - lastKeepalive < 4000) return;
+      lastKeepalive = Date.now();
+      if (ctx.state === "suspended") ctx.resume();
+      const oscillator = ctx.createOscillator();
+      const gain = ctx.createGain();
+      gain.gain.value = 0.00001;
+      oscillator.connect(gain);
+      gain.connect(ctx.destination);
+      oscillator.start();
+      oscillator.stop(ctx.currentTime + 0.05);
+    }
+
+    function playBeep(ctx, freq, duration) {
+      const when = ctx.currentTime;
+      const oscillator = ctx.createOscillator();
+      const gain = ctx.createGain();
+      oscillator.type = "square";
+      oscillator.frequency.value = freq;
+      gain.gain.setValueAtTime(0.22, when);
+      gain.gain.linearRampToValueAtTime(0.001, when + duration);
+      oscillator.connect(gain);
+      gain.connect(ctx.destination);
+      oscillator.start(when);
+      oscillator.stop(when + duration + 0.02);
+    }
+
+    async function playCountdownSound() {
+      const ctx = getAudioContext();
+      if (ctx.state === "suspended") {
+        await ctx.resume();
+      }
+      clearAlarm();
+      const delays = [0, 280, 560, 840, 1120, 1400, 1800, 2080, 2360];
+      delays.forEach((delay, index) => {
+        alarmTimeouts.push(window.setTimeout(() => {
+          if (ctx.state === "suspended") ctx.resume();
+          playBeep(ctx, index % 2 === 0 ? 880 : 1240, 0.18);
+        }, delay));
       });
     }
 
@@ -778,7 +876,7 @@
       timerDisplay.classList.add("done");
       timerStatus.textContent = "Time is up.";
       setTimerButtons(false);
-      playCountdownSound();
+      void playCountdownSound();
     }
 
     function tickCountdown() {
@@ -787,6 +885,7 @@
         finishCountdown();
         return;
       }
+      keepAudioAlive();
       timerDisplay.textContent = formatCountdown(remaining);
     }
 
@@ -806,12 +905,49 @@
 
     timerReset.addEventListener("click", () => {
       stopCountdown();
+      clearAlarm();
       timerDisplay.classList.remove("done");
       timerDisplay.textContent = formatCountdown(COUNTDOWN_SECONDS);
       timerStatus.textContent = "";
       setTimerButtons(false);
     });
 
+    try {
+      imessageEmail.value = localStorage.getItem(IMESSAGE_KEY) || "";
+    } catch {
+      imessageEmail.value = "";
+    }
+
+    imessageEmail.addEventListener("input", () => {
+      try {
+        localStorage.setItem(IMESSAGE_KEY, imessageEmail.value.trim());
+      } catch {
+        /* ignore quota / private mode */
+      }
+    });
+
+    document.getElementById("send-imessage").addEventListener("click", () => {
+      const email = imessageEmail.value.trim();
+      const code = codeEl.textContent.trim();
+      if (!email || !email.includes("@")) {
+        statusEl.textContent = "Enter an iMessage email first.";
+        imessageEmail.focus();
+        return;
+      }
+      if (!code) {
+        statusEl.textContent = "Generate a dial code first.";
+        return;
+      }
+      try {
+        localStorage.setItem(IMESSAGE_KEY, email);
+      } catch {
+        /* ignore quota / private mode */
+      }
+      const url = `sms:${encodeURIComponent(email)}&body=${encodeURIComponent(code)}`;
+      window.location.href = url;
+    });
+
+    restoreDraft();
     renderHistory();
     renderCardCheck(currentCardValues());
   </script>
